@@ -346,22 +346,39 @@ function initMiniMap(walk){
   miniMaps[walk.idx] = mini;
 }
 
+// Touch devices have no real "hover" state, so a tap is the only interaction
+// they get. Binding the hover-preview tooltip there means the same tap that
+// should open the full popup can instead get consumed by the tooltip's
+// mouseover-style trigger — on iOS Safari this has been observed to leave a
+// single tap showing only the small thumbnail, never the popup. Skipping the
+// tooltip bind on touch devices removes that conflict entirely: touch users
+// go straight from tap to full popup, which is the only preview they need
+// anyway since there's no hover state to preview *before* committing to a tap.
+const IS_TOUCH_DEVICE = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
 WALKS.forEach(walk => {
   const marker = L.marker([walk.lat, walk.lon], {icon: walkIcon(walk)});
 
-  // hover thumbnail tooltip
-  let tipHtml;
-  if (walk.thumb){
-    tipHtml = '<div class="thumb-card"><img src="' + walk.thumb + '" alt=""><div class="tc-body">' +
-      '<div class="tc-name">' + walk.idx + '. ' + walk.name + '</div>' +
-      '<div class="tc-meta">' + walk.difficulty + ' · ' + walk.time + '</div>' +
-      '</div></div>';
-  } else {
-    tipHtml = '<div class="thumb-noimg"><b>' + walk.idx + '. ' + walk.name + '</b><br><span style="font-size:11px;color:#777;">' + walk.difficulty + ' · ' + walk.time + '</span></div>';
+  if (!IS_TOUCH_DEVICE){
+    // hover thumbnail tooltip (desktop mouse only — see IS_TOUCH_DEVICE note above)
+    let tipHtml;
+    if (walk.thumb){
+      tipHtml = '<div class="thumb-card"><img src="' + walk.thumb + '" alt=""><div class="tc-body">' +
+        '<div class="tc-name">' + walk.idx + '. ' + walk.name + '</div>' +
+        '<div class="tc-meta">' + walk.difficulty + ' · ' + walk.time + '</div>' +
+        '</div></div>';
+    } else {
+      tipHtml = '<div class="thumb-noimg"><b>' + walk.idx + '. ' + walk.name + '</b><br><span style="font-size:11px;color:#777;">' + walk.difficulty + ' · ' + walk.time + '</span></div>';
+    }
+    marker.bindTooltip(tipHtml, {direction:'top', offset:[0,-14], className:'thumb-tip', sticky:false});
   }
-  marker.bindTooltip(tipHtml, {direction:'top', offset:[0,-14], className:'thumb-tip', sticky:false});
 
   marker.bindPopup(popupHtml(walk), {maxWidth:360, minWidth:320});
+  // Belt-and-braces for hybrid touch+mouse devices (e.g. touchscreen laptops):
+  // a tooltip left open when the popup opens has no 'mouseout' to close it on
+  // touch, so it would otherwise linger indefinitely. Force it closed on every
+  // click/tap regardless of device type.
+  marker.on('click', function(){ this.closeTooltip(); });
   marker.walkData = walk;
   markers[walk.idx] = marker;
 });
